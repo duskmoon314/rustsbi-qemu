@@ -204,11 +204,16 @@ unsafe fn pmps<const L: usize>() -> [(u8, usize); L] {
     let xlen: usize = core::mem::size_of::<usize>() * 8;
     let cfgs_in_pmpcfg: usize = xlen / 8;
     let pmpcfg_max_id: usize = L / cfgs_in_pmpcfg;
+    println!(
+        "xlen {} cfgs_in_pmpcfg {} pmpcfg_max_id {}",
+        xlen, cfgs_in_pmpcfg, pmpcfg_max_id
+    );
     let mut ans = [(0, 0); L];
     for i in (0..pmpcfg_max_id).step_by(xlen / 32) {
         let pmpcfgi = pmpcfg_r(i).to_le_bytes();
         for j in 0..cfgs_in_pmpcfg {
             let pmpaddr_id = i * 4 + j;
+            println!("i {} j {} pmpaddr_id {}", i, j, pmpaddr_id);
             let pmpaddri = pmpaddr_r(pmpaddr_id);
             ans[pmpaddr_id] = (pmpcfgi[j], pmpaddri);
         }

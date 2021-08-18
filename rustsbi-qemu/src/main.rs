@@ -47,8 +47,35 @@ fn panic(info: &PanicInfo) -> ! {
     loop {}
 }
 
+pub extern "C" fn mp_hook() -> bool {
+    let hart_id = riscv::register::mhartid::read();
+    if hart_id == 0 {
+        true
+    } else {
+        use riscv::asm::wfi;
+        use riscv::register::{mie, mip};
+        unsafe {
+            let mut clint = clint::Clint::new(0x2000000 as *mut u8);
+            clint.clear_soft(hart_id);
+            mie::set_msoft();
+
+            loop {
+                wfi();
+                if mip::read().msoft() {
+                    break;
+                }
+            }
+
+            mie::clear_msoft();
+            clint.clear_soft(hart_id);
+        }
+        false
+    }
+}
+
 extern "C" fn rust_main(hartid: usize, dtb_pa: usize) -> ! {
     runtime::init();
+    if mp_hook() {}
     if hartid == 0 {
         init_heap();
         init_legacy_stdio();
@@ -127,16 +154,21 @@ fn delegate_interrupt_exception() {
 fn set_pmp() {
     // todo: 根据QEMU的loader device等等，设置这里的权限配置
     unsafe {
-        asm!(
-            "li     {tmp}, ((0x08 << 16) |(0x1F << 8) | (0x1F << 0) )", // 0 = NAPOT,ARWX; 1 = NAPOT,ARWX; 2 = TOR,A;
-            "csrw   0x3A0, {tmp}",
-            "li     {tmp}, ((0x0000000080000000 >> 2) | 0x3ffff)", // 0 = 0x0000000080000000-0x000000008001ffff
-            "csrw   0x3B0, {tmp}",
-            "li     {tmp}, ((0x0000000080200000 >> 2) | 0x1fffff)", // 1 = 0x0000000080200000-0x000000008021ffff
-            "csrw   0x3B1, {tmp}",
-            "sfence.vma",
-            tmp = out(reg) _
-        )
+        // asm!(
+        //     "li     {tmp}, ((0x08 << 16) |(0x1F << 8) | (0x1F << 0) )", // 0 = NAPOT,ARWX; 1 = NAPOT,ARWX; 2 = TOR,A;
+        //     "csrw   0x3A0, {tmp}",
+        //     "li     {tmp}, ((0x0000000080000000 >> 2) | 0x3ffff)", // 0 = 0x0000000080000000-0x000000008001ffff
+        //     "csrw   0x3B0, {tmp}",
+        //     "li     {tmp}, ((0x0000000080200000 >> 2) | 0x1fffff)", // 1 = 0x0000000080200000-0x000000008021ffff
+        //     "csrw   0x3B1, {tmp}",
+        //     // "li     {tmp}, ((0x000000000c000000 >> 2) | 0x3ffffff)",
+        //     // "csrw   0x3B2, {tmp}",
+        //     "sfence.vma",
+        //     tmp = out(reg) _
+        // )
+        use riscv::register::{pmpaddr0, pmpcfg0};
+        pmpcfg0::write(0x1f);
+        pmpaddr0::write(usize::MAX);
     };
 }
 

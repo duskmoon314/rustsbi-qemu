@@ -214,6 +214,7 @@ fn xtask_qemu_run(xtask_env: &XtaskEnv) {
     let status = Command::new("qemu-system-riscv64")
         .current_dir(dist_dir(xtask_env))
         .args(&["-machine", "virt"])
+        .args(&["-smp", "4"])
         .args(&["-bios", "rustsbi-qemu.bin"])
         .args(&["-kernel", "test-kernel.bin"])
         .arg("-nographic")
